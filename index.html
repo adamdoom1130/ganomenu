@@ -1,954 +1,902 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>家庭菜单</title>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    
-    <style>
-        /* =========================================
-           1. CSS VARIABLES & RESET
-           配置色彩心理学变量与重置浏览器默认样式
-           ========================================= */
-        :root {
-            --primary-bg: #FFF8EC; /* 米白色，减少视网膜疲劳 */
-            --primary-color: #FF8C42; /* 橙色，激发食欲的主题色 */
-            --primary-hover: #e67a35;
-            --accent-color: #FF5757; /* 浅红色，用于高对比度的警示与推荐标签 */
-            --text-dark: #333333;
-            --text-light: #777777;
-            --white: #FFFFFF;
-            --border-color: #f0e4d3;
-            --shadow: 0 4px 12px rgba(255, 140, 66, 0.15);
-            --radius: 12px;
-            --transition: all 0.3s ease;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            -webkit-tap-highlight-color: transparent; 
-        }
-
-        body {
-            font-family: 'Helvetica Neue', Helvetica, Arial, 'Microsoft Yahei', sans-serif;
-            background-color: var(--primary-bg);
-            color: var(--text-dark);
-            line-height: 1.6;
-            padding-bottom: 80px; 
-        }
-
-        a { text-decoration: none; color: inherit; }
-        ul { list-style: none; }
-        button { border: none; outline: none; cursor: pointer; font-family: inherit; }
-        input, textarea, select { 
-            border: 1px solid var(--border-color); 
-            border-radius: 8px; 
-            padding: 10px; 
-            width: 100%; 
-            font-family: inherit; 
-            background: var(--white);
-        }
-
-        /* =========================================
-           2. LAYOUT & NAVIGATION
-           ========================================= */
-      .header {
-            background-color: var(--white);
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            padding: 15px 20px;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-      .header h1 {
-            font-size: 20px;
-            color: var(--primary-color);
-            cursor: pointer;
-        }
-
-      .admin-toggle {
-            font-size: 14px;
-            color: var(--text-light);
-            background: var(--primary-bg);
-            padding: 5px 10px;
-            border-radius: 20px;
-            cursor: pointer;
-            transition: var(--transition);
-        }
-      .admin-toggle:hover {
-            background: var(--primary-color);
-            color: var(--white);
-        }
-
-      .container {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 15px;
-        }
-
-        /* 纯CSS水平滚动分类栏 */
-      .categories-wrapper {
-            background: var(--white);
-            padding: 10px 15px;
-            margin-bottom: 15px;
-            overflow-x: auto;
-            white-space: nowrap;
-            -webkit-overflow-scrolling: touch; 
-            border-radius: var(--radius);
-            box-shadow: 0 2px 5px rgba(0,0,0,0.02);
-            scrollbar-width: none; 
-        }
-      .categories-wrapper::-webkit-scrollbar { display: none; }
-
-      .category-btn {
-            display: inline-block;
-            padding: 8px 16px;
-            margin-right: 10px;
-            background: var(--primary-bg);
-            border-radius: 20px;
-            color: var(--text-light);
-            font-size: 14px;
-            transition: var(--transition);
-            cursor: pointer;
-        }
-      .category-btn.active {
-            background: var(--primary-color);
-            color: var(--white);
-            font-weight: bold;
-        }
-
-        /* =========================================
-           3. FOOD CARDS GRID
-           ========================================= */
-      .food-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-            gap: 15px;
-        }
-
-      .food-card {
-            background: var(--white);
-            border-radius: var(--radius);
-            overflow: hidden;
-            box-shadow: var(--shadow);
-            position: relative;
-            cursor: pointer;
-            transition: var(--transition);
-        }
-      .food-card:active { transform: scale(0.98); }
-
-      .food-img-placeholder {
-            width: 100%;
-            height: 140px;
-            background-color: var(--border-color);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: var(--text-light);
-            font-size: 12px;
-            object-fit: cover;
-        }
-
-      .food-info { padding: 12px; }
-      .food-title { font-size: 16px; font-weight: bold; margin-bottom: 5px; }
-      .food-desc { font-size: 12px; color: var(--text-light); margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-      .food-price { color: var(--accent-color); font-weight: bold; font-size: 18px; }
-        
-      .tag-recommend {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background: var(--accent-color);
-            color: var(--white);
-            font-size: 10px;
-            padding: 3px 8px;
-            border-radius: 10px;
-            font-weight: bold;
-        }
-
-        /* =========================================
-           4. MODALS & FORMS (Details & Cart)
-           ========================================= */
-      .modal-overlay {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 1000;
-            display: none;
-            justify-content: center;
-            align-items: center;
-            animation: fadeIn 0.3s;
-        }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-
-      .modal-content {
-            background: var(--white);
-            width: 90%;
-            max-width: 400px;
-            border-radius: var(--radius);
-            overflow: hidden;
-            position: relative;
-            transform: translateY(20px);
-            animation: slideUp 0.3s forwards;
-        }
-        @keyframes slideUp { to { transform: translateY(0); } }
-
-      .close-btn {
-            position: absolute;
-            top: 10px; right: 15px;
-            font-size: 24px;
-            color: var(--text-dark);
-            background: rgba(255,255,255,0.8);
-            width: 30px; height: 30px;
-            border-radius: 50%;
-            display: flex; justify-content: center; align-items: center;
-            cursor: pointer;
-            z-index: 10;
-        }
-
-      .detail-img { width: 100%; height: 200px; object-fit: cover; }
-      .detail-body { padding: 20px; }
-      .detail-price-row { display: flex; justify-content: space-between; align-items: center; margin: 15px 0; }
-        
-      .qty-controls { display: flex; align-items: center; background: var(--primary-bg); border-radius: 20px; padding: 2px; }
-      .qty-btn { width: 30px; height: 30px; border-radius: 50%; background: var(--white); color: var(--primary-color); font-size: 18px; font-weight: bold; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-      .qty-val { width: 40px; text-align: center; font-weight: bold; }
-
-      .btn-primary {
-            display: block; width: 100%;
-            background: var(--primary-color); color: var(--white);
-            padding: 12px; border-radius: 8px; font-size: 16px; font-weight: bold;
-            text-align: center; margin-top: 15px;
-            transition: var(--transition);
-        }
-      .btn-danger { background: var(--accent-color); }
-      .btn-secondary { background: var(--text-light); color: var(--white); }
-      .btn-small { padding: 5px 10px; font-size: 12px; width: auto; display: inline-block; margin-top: 0; }
-
-      .cart-fab {
-            position: fixed;
-            bottom: 20px; right: 20px;
-            background: var(--primary-color);
-            color: var(--white);
-            width: 60px; height: 60px;
-            border-radius: 50%;
-            display: flex; justify-content: center; align-items: center;
-            box-shadow: 0 5px 15px rgba(255, 140, 66, 0.4);
-            cursor: pointer;
-            z-index: 90;
-            font-size: 24px;
-        }
-      .cart-badge {
-            position: absolute;
-            top: 0; right: 0;
-            background: var(--accent-color);
-            color: white;
-            font-size: 12px;
-            width: 20px; height: 20px;
-            border-radius: 50%;
-            display: flex; justify-content: center; align-items: center;
-            font-weight: bold;
-        }
-
-      .cart-item {
-            display: flex;
-            align-items: center;
-            background: var(--white);
-            padding: 10px;
-            border-radius: var(--radius);
-            margin-bottom: 10px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.02);
-        }
-      .cart-item-img { width: 60px; height: 60px; border-radius: 8px; object-fit: cover; margin-right: 15px; }
-      .cart-item-info { flex: 1; }
-      .cart-total-bar {
-            background: var(--white);
-            padding: 15px;
-            border-radius: var(--radius);
-            margin-top: 20px;
-            box-shadow: var(--shadow);
-            font-size: 18px; font-weight: bold;
-            display: flex; justify-content: space-between;
-        }
-      .form-group { margin-top: 15px; }
-      .form-group label { display: block; font-size: 14px; margin-bottom: 5px; color: var(--text-light); }
-
-        /* =========================================
-           5. SUCCESS ANIMATION
-           ========================================= */
-      .success-wrapper { text-align: center; padding: 50px 20px; background: var(--white); border-radius: var(--radius); margin-top: 40px;}
-      .success-svg { width: 80px; height: 80px; margin: 0 auto 20px; display: block; }
-      .success-circle { stroke-dasharray: 252; stroke-dashoffset: 252; animation: draw-circle 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
-      .success-check { stroke-dasharray: 50; stroke-dashoffset: 50; animation: draw-check 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) 0.4s forwards; }
-        @keyframes draw-circle { to { stroke-dashoffset: 0; } }
-        @keyframes draw-check { to { stroke-dashoffset: 0; } }
-
-        /* =========================================
-           6. ADMIN DASHBOARD
-           ========================================= */
-      .admin-nav { display: flex; margin-bottom: 20px; background: var(--white); border-radius: 8px; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.05);}
-      .admin-nav button { flex: 1; padding: 12px; background: transparent; font-size: 14px; color: var(--text-light); border-radius: 0; margin-top: 0;}
-      .admin-nav button.active { background: var(--primary-color); color: var(--white); font-weight: bold; }
-        
-      .admin-list { display: flex; flex-direction: column; gap: 10px; }
-      .admin-card { background: var(--white); padding: 15px; border-radius: var(--radius); box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-      .admin-card-header { display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 10px; }
-      .order-status { font-weight: bold; }
-      .status-pending { color: var(--accent-color); }
-      .status-making { color: var(--primary-color); }
-      .status-completed { color: #4CAF50; }
-      .order-actions { display: flex; gap: 10px; margin-top: 10px; }
-
-      .category-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-color); }
-
-      .hidden { display: none!important; }
-      .loader-box { text-align: center; padding: 50px 20px; color: var(--text-light); }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>家庭菜单</title>
+  <style>
+    :root {
+      --primary-bg:#FFF8EC;--primary-color:#FF8C42;--primary-hover:#e67a35;
+      --accent-color:#FF5757;--text-dark:#333;--text-light:#777;
+      --white:#FFF;--border-color:#f0e4d3;
+      --shadow:0 4px 12px rgba(255,140,66,.15);--radius:12px;--transition:all .25s ease;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+    html{scroll-behavior:smooth}
+    body{font-family:'Helvetica Neue',Helvetica,Arial,'Microsoft Yahei',sans-serif;background:var(--primary-bg);color:var(--text-dark);line-height:1.6;padding-bottom:80px}
+    button,input,textarea,select{font:inherit}
+    button{border:none;cursor:pointer}
+    input,textarea,select{border:1px solid var(--border-color);border-radius:8px;padding:10px;width:100%;background:var(--white);color:var(--text-dark)}
+    .hidden{display:none!important}
+    .header{background:var(--white);box-shadow:0 2px 10px rgba(0,0,0,.05);padding:15px 20px;position:sticky;top:0;z-index:100;display:flex;justify-content:space-between;align-items:center;gap:12px}
+    .header h1{font-size:20px;color:var(--primary-color);cursor:pointer;white-space:nowrap}
+    .admin-toggle{font-size:13px;color:var(--text-light);background:var(--primary-bg);padding:6px 14px;border-radius:20px;cursor:pointer;white-space:nowrap;border:1px solid var(--border-color)}
+    .container{max-width:860px;margin:0 auto;padding:15px}
+    .top-note,.admin-card{background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:15px;margin-bottom:15px}
+    .top-note{color:var(--text-light);font-size:14px}
+    .categories-wrapper{background:var(--white);padding:10px 15px;margin-bottom:15px;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;border-radius:var(--radius);box-shadow:0 2px 5px rgba(0,0,0,.02);scrollbar-width:none}
+    .categories-wrapper::-webkit-scrollbar{display:none}
+    .category-btn{display:inline-block;padding:8px 16px;margin-right:10px;background:var(--primary-bg);border-radius:20px;color:var(--text-light);font-size:14px;cursor:pointer}
+    .category-btn.active{background:var(--primary-color);color:var(--white);font-weight:bold}
+    .food-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(165px,1fr));gap:15px}
+    .food-card{background:var(--white);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);position:relative;cursor:pointer;transition:var(--transition)}
+    .food-card:hover{transform:translateY(-2px)}
+    .food-card:active{transform:scale(.98)}
+    .food-img{width:100%;height:138px;display:flex;align-items:center;justify-content:center;object-fit:cover;background:linear-gradient(135deg,#ffb36b,#ff7f50)}
+    .food-info{padding:12px}
+    .food-title{font-size:16px;font-weight:bold;margin-bottom:6px}
+    .food-desc{font-size:12px;color:var(--text-light);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:38px}
+    .food-price{color:var(--accent-color);font-weight:bold;font-size:15px;margin-top:8px}
+    .tag-recommend{position:absolute;top:10px;left:10px;background:var(--accent-color);color:var(--white);font-size:10px;padding:3px 8px;border-radius:10px;font-weight:bold;z-index:2}
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:none;justify-content:center;align-items:center;padding:18px}
+    .modal-content{background:var(--white);width:100%;max-width:430px;border-radius:var(--radius);overflow:hidden;position:relative;animation:slideUp .25s ease}
+    @keyframes slideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
+    .close-btn{position:absolute;top:10px;right:15px;font-size:24px;color:var(--text-dark);background:rgba(255,255,255,.88);width:30px;height:30px;border-radius:50%;display:flex;justify-content:center;align-items:center;z-index:10;cursor:pointer}
+    .detail-img{width:100%;height:210px;object-fit:cover;background:linear-gradient(135deg,#ffb36b,#ff7f50)}
+    .detail-body{padding:20px}
+    .detail-price-row{display:flex;justify-content:space-between;align-items:center;margin:15px 0;gap:10px}
+    .qty-controls{display:flex;align-items:center;background:var(--primary-bg);border-radius:20px;padding:2px;flex-shrink:0}
+    .qty-btn{width:30px;height:30px;border-radius:50%;background:var(--white);color:var(--primary-color);font-size:18px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+    .qty-val{width:40px;text-align:center;font-weight:bold}
+    .btn-primary,.btn-secondary,.btn-danger{display:block;width:100%;color:var(--white);padding:12px;border-radius:8px;font-size:16px;font-weight:bold;text-align:center;margin-top:15px;transition:var(--transition)}
+    .btn-primary{background:var(--primary-color)}
+    .btn-primary:hover{background:var(--primary-hover)}
+    .btn-secondary{background:var(--text-light)}
+    .btn-danger{background:var(--accent-color)}
+    .btn-small{padding:6px 10px;font-size:12px;width:auto;display:inline-block;margin-top:0}
+    .btn-ghost{background:transparent;color:var(--primary-color);border:1px solid var(--primary-color);padding:10px 12px;border-radius:8px;font-weight:bold}
+    .cart-fab{position:fixed;bottom:20px;right:20px;background:var(--primary-color);color:var(--white);width:60px;height:60px;border-radius:50%;display:flex;justify-content:center;align-items:center;box-shadow:0 5px 15px rgba(255,140,66,.4);cursor:pointer;z-index:90;font-size:24px}
+    .cart-badge{position:absolute;top:-2px;right:-2px;background:var(--accent-color);color:white;font-size:12px;width:20px;height:20px;border-radius:50%;display:flex;justify-content:center;align-items:center;font-weight:bold}
+    .cart-item{display:flex;align-items:center;background:var(--white);padding:10px;border-radius:var(--radius);margin-bottom:10px;box-shadow:0 2px 5px rgba(0,0,0,.02);gap:12px}
+    .cart-item-img{width:60px;height:60px;border-radius:8px;object-fit:cover;flex-shrink:0;background:linear-gradient(135deg,#ffb36b,#ff7f50)}
+    .cart-item-info{flex:1;min-width:0}
+    .cart-total-bar{background:var(--white);padding:15px;border-radius:var(--radius);margin-top:20px;box-shadow:var(--shadow);font-size:18px;font-weight:bold;display:flex;justify-content:space-between}
+    .form-group{margin-top:15px}
+    .form-group label{display:block;font-size:14px;margin-bottom:5px;color:var(--text-light)}
+    .success-wrapper{text-align:center;padding:50px 20px;background:var(--white);border-radius:var(--radius);margin-top:40px}
+    .success-svg{width:80px;height:80px;margin:0 auto 20px;display:block}
+    .success-circle{stroke-dasharray:252;stroke-dashoffset:252;animation:draw-circle .6s cubic-bezier(.34,1.56,.64,1) forwards}
+    .success-check{stroke-dasharray:50;stroke-dashoffset:50;animation:draw-check .4s cubic-bezier(.34,1.56,.64,1) .4s forwards}
+    @keyframes draw-circle{to{stroke-dashoffset:0}}
+    @keyframes draw-check{to{stroke-dashoffset:0}}
+    .admin-nav{display:flex;margin-bottom:20px;background:var(--white);border-radius:8px;overflow:hidden;box-shadow:0 2px 5px rgba(0,0,0,.05)}
+    .admin-nav button{flex:1;padding:12px;background:transparent;font-size:14px;color:var(--text-light);margin-top:0}
+    .admin-nav button.active{background:var(--primary-color);color:var(--white);font-weight:bold}
+    .admin-list{display:flex;flex-direction:column;gap:10px}
+    .admin-card-header{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid var(--border-color);padding-bottom:10px;margin-bottom:10px;flex-wrap:wrap}
+    .order-status{font-weight:bold}
+    .status-pending{color:var(--accent-color)}
+    .status-making{color:var(--primary-color)}
+    .status-completed{color:#4CAF50}
+    .order-actions{display:flex;gap:10px;margin-top:10px;flex-wrap:wrap}
+    .category-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-color)}
+    .pw-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:2000;display:flex;justify-content:center;align-items:center;padding:20px}
+    .pw-modal{background:var(--white);border-radius:var(--radius);padding:30px;width:100%;max-width:360px;box-shadow:0 10px 40px rgba(0,0,0,.2);animation:slideUp .25s ease}
+    .pw-modal h2{text-align:center;color:var(--primary-color);margin-bottom:8px}
+    .pw-modal p{text-align:center;color:var(--text-light);font-size:14px;margin-bottom:20px}
+    .pw-error{color:var(--accent-color);font-size:13px;text-align:center;margin-top:10px;min-height:20px}
+    .loading-box{background:var(--white);padding:20px;border-radius:var(--radius);box-shadow:var(--shadow);text-align:center;color:var(--text-light)}
+    @media(max-width:480px){
+      .header{padding:14px 16px}
+      .header h1{font-size:18px}
+      .container{padding:12px}
+      .food-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+      .detail-price-row{flex-direction:column;align-items:flex-start}
+    }
+  </style>
 </head>
 <body>
+<header class="header">
+  <h1 onclick="router.navigate('#home')">🏠 家庭菜单</h1>
+  <div class="admin-toggle" onclick="auth.showPasswordModal()">管理模式 🔒</div>
+</header>
 
-    <header class="header">
-        <h1 onclick="router.navigate('#home')">🏠 家庭菜单</h1>
-        <div class="admin-toggle" onclick="router.navigate('#admin-orders')">管理模式</div>
-    </header>
+<main id="app" class="container"></main>
 
-    <main id="app" class="container"></main>
-
-    <div id="detail-modal" class="modal-overlay">
-        <div class="modal-content">
-            <div class="close-btn" onclick="ui.closeModal()">×</div>
-            <img src="" id="modal-img" class="detail-img" alt="dish">
-            <div class="detail-body">
-                <h2 id="modal-title"></h2>
-                <p id="modal-desc" class="food-desc" style="margin-top: 10px; white-space: normal;"></p>
-                <div class="detail-price-row">
-                    <div id="modal-price" class="food-price"></div>
-                    <div class="qty-controls">
-                        <button class="qty-btn" onclick="ui.modalQtyChange(-1)">-</button>
-                        <span id="modal-qty" class="qty-val">1</span>
-                        <button class="qty-btn" onclick="ui.modalQtyChange(1)">+</button>
-                    </div>
-                </div>
-                <button class="btn-primary" onclick="cart.addToCartFromModal()">加入购物车</button>
-            </div>
+<div id="detail-modal" class="modal-overlay" onclick="ui.overlayClose(event)">
+  <div class="modal-content">
+    <div class="close-btn" onclick="ui.closeModal()">×</div>
+    <img src="" id="modal-img" class="detail-img" alt="">
+    <div class="detail-body">
+      <h2 id="modal-title"></h2>
+      <p id="modal-desc" style="font-size:13px;color:var(--text-light);margin-top:8px;white-space:pre-line;"></p>
+      <div class="detail-price-row">
+        <div class="food-price">按家庭安排制作</div>
+        <div class="qty-controls">
+          <button class="qty-btn" onclick="ui.qtyChange(-1)">-</button>
+          <span id="modal-qty" class="qty-val">1</span>
+          <button class="qty-btn" onclick="ui.qtyChange(1)">+</button>
         </div>
+      </div>
+      <button class="btn-primary" onclick="cart.addFromModal()">加入购物车</button>
     </div>
+  </div>
+</div>
 
-    <div id="cart-fab" class="cart-fab hidden" onclick="router.navigate('#cart')">
-        🛒<div id="cart-badge" class="cart-badge">0</div>
+<div id="pw-modal" class="pw-modal-overlay hidden">
+  <div class="pw-modal">
+    <h2>🔐 管理员登录</h2>
+    <p>请输入管理密码进入后台</p>
+    <div class="form-group">
+      <input type="password" id="pw-input" placeholder="请输入密码" onkeydown="if(event.key==='Enter')auth.check()">
     </div>
+    <button class="btn-primary" onclick="auth.check()">确认进入</button>
+    <div id="pw-error" class="pw-error"></div>
+    <button class="btn-secondary" style="margin-top:10px;" onclick="auth.close()">取消</button>
+  </div>
+</div>
 
+<div id="cart-fab" class="cart-fab hidden" onclick="router.navigate('#cart')">
+  🛒<div id="cart-badge" class="cart-badge">0</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-// ==========================================
-// 1. SUPABASE 云端服务配置与初始化
-// ==========================================
-const SUPABASE_URL = 'https://mijiqhpnsfqsbclewsta.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_xaXX9J4zsRpcIK1tnmLKZQ_V-Po2Tws';
-const ADMIN_PASSWORD = 'shc1234'; // 管理员密码
+const SUPABASE_URL = "https://mijiqhpnsfqsbclewsta.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_xaXX9J4zsRpcIK1tnmLKZQ_V-Po2Tws";
+const ADMIN_PASSWORD = "shc1234";
 
-// 创建客户端实例
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-// 数据库表名映射配置 (可根据你实际建表的名称调整)
-const TABLES = {
-    DISHES: 'dishes',
-    CATEGORIES: 'categories',
-    ORDERS: 'orders'
-};
-
-// ==========================================
-// 2. 预设数据 (当数据库连接失败或为空时的降级方案)
-// ==========================================
-const DEFAULT_CATEGORIES = ['猪肉类', '鸡肉类', '海鲜类', '蔬菜类', '主食类', '饮品'];
+const DEFAULT_CATEGORIES = ["猪肉类","鸡肉类","鸡蛋类","牛肉类","海鲜类","蔬菜类","主食类","汤类"];
 const DEFAULT_DISHES = [
-    { id: 'd1', name: '辣椒炒肉', price: 28, desc: '五花肉/瘦肉', category: '猪肉类', recommend: true, img: '' },
-    { id: 'd2', name: '黄焖鸡', price: 32, desc: '招牌必点', category: '鸡肉类', recommend: true, img: '' },
-    { id: 'd3', name: '爆炒花甲', price: 25, desc: '微辣', category: '海鲜类', recommend: false, img: '' },
-    { id: 'd4', name: '蒜蓉粉丝娃娃菜', price: 18, desc: '清淡解腻', category: '蔬菜类', recommend: false, img: '' },
-    { id: 'd5', name: '排骨豆角焖面', price: 22, desc: '管饱主食', category: '主食类', recommend: true, img: '' }
+  {
+    "id": "d001",
+    "name": "辣椒炒肉",
+    "category": "猪肉类",
+    "description": "备注：五花肉/瘦肉，肉片/肉丝，银耳/走",
+    "recommend": true
+  },
+  {
+    "id": "d002",
+    "name": "蒜苔炒肉",
+    "category": "猪肉类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d003",
+    "name": "肉末冬瓜丁",
+    "category": "猪肉类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d004",
+    "name": "青椒酿肉",
+    "category": "猪肉类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d005",
+    "name": "红烧肉",
+    "category": "猪肉类",
+    "description": "",
+    "recommend": true
+  },
+  {
+    "id": "d006",
+    "name": "红烧排骨",
+    "category": "猪肉类",
+    "description": "",
+    "recommend": true
+  },
+  {
+    "id": "d007",
+    "name": "糖醋排骨",
+    "category": "猪肉类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d008",
+    "name": "葱烧大排",
+    "category": "猪肉类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d009",
+    "name": "排骨土豆炖豆角",
+    "category": "猪肉类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d010",
+    "name": "土豆炒肉",
+    "category": "猪肉类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d011",
+    "name": "干锅花菜",
+    "category": "猪肉类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d012",
+    "name": "蜜汁土豆鸡丁",
+    "category": "鸡肉类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d013",
+    "name": "黄焖鸡",
+    "category": "鸡肉类",
+    "description": "",
+    "recommend": true
+  },
+  {
+    "id": "d014",
+    "name": "山东炒鸡",
+    "category": "鸡肉类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d015",
+    "name": "大盘鸡",
+    "category": "鸡肉类",
+    "description": "",
+    "recommend": true
+  },
+  {
+    "id": "d016",
+    "name": "辣子鸡",
+    "category": "鸡肉类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d017",
+    "name": "凉拌手撕鸡",
+    "category": "鸡肉类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d018",
+    "name": "小炒鸡腿肉",
+    "category": "鸡肉类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d019",
+    "name": "可乐鸡翅",
+    "category": "鸡肉类",
+    "description": "",
+    "recommend": true
+  },
+  {
+    "id": "d020",
+    "name": "西红柿炒蛋",
+    "category": "鸡蛋类",
+    "description": "",
+    "recommend": true
+  },
+  {
+    "id": "d021",
+    "name": "青椒炒蛋",
+    "category": "鸡蛋类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d022",
+    "name": "韭菜炒蛋",
+    "category": "鸡蛋类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d023",
+    "name": "鸡蛋饼",
+    "category": "鸡蛋类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d024",
+    "name": "煎荷包蛋",
+    "category": "鸡蛋类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d025",
+    "name": "蒸蛋",
+    "category": "鸡蛋类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d026",
+    "name": "清炖牛肉",
+    "category": "牛肉类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d027",
+    "name": "红烧牛肉",
+    "category": "牛肉类",
+    "description": "备注：牛腩/牛肋条/牛小排",
+    "recommend": true
+  },
+  {
+    "id": "d028",
+    "name": "小炒黄牛肉",
+    "category": "牛肉类",
+    "description": "",
+    "recommend": true
+  },
+  {
+    "id": "d029",
+    "name": "泡椒牛肉",
+    "category": "牛肉类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d030",
+    "name": "酱牛肉",
+    "category": "牛肉类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d031",
+    "name": "爆炒花甲",
+    "category": "海鲜类",
+    "description": "",
+    "recommend": true
+  },
+  {
+    "id": "d032",
+    "name": "水煮虾",
+    "category": "海鲜类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d033",
+    "name": "虾仁滑蛋",
+    "category": "海鲜类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d034",
+    "name": "青椒酿虾滑",
+    "category": "海鲜类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d035",
+    "name": "清蒸鱼",
+    "category": "海鲜类",
+    "description": "",
+    "recommend": true
+  },
+  {
+    "id": "d036",
+    "name": "酸菜鱼",
+    "category": "海鲜类",
+    "description": "",
+    "recommend": true
+  },
+  {
+    "id": "d037",
+    "name": "水煮鱼",
+    "category": "海鲜类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d038",
+    "name": "蒜蓉粉丝娃娃菜",
+    "category": "蔬菜类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d039",
+    "name": "擂椒皮蛋",
+    "category": "蔬菜类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d040",
+    "name": "酸辣白菜",
+    "category": "蔬菜类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d041",
+    "name": "炒土豆丝",
+    "category": "蔬菜类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d042",
+    "name": "蒜爆青菜",
+    "category": "蔬菜类",
+    "description": "备注：生菜，油麦菜，空心菜，青苔",
+    "recommend": true
+  },
+  {
+    "id": "d043",
+    "name": "蚝油生菜",
+    "category": "蔬菜类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d044",
+    "name": "蒸菜",
+    "category": "蔬菜类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d045",
+    "name": "酱烧豆腐",
+    "category": "蔬菜类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d046",
+    "name": "排骨豆角焖面",
+    "category": "主食类",
+    "description": "",
+    "recommend": true
+  },
+  {
+    "id": "d047",
+    "name": "蛋炒饭",
+    "category": "主食类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d048",
+    "name": "干炒牛河",
+    "category": "主食类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d049",
+    "name": "卤肉饭",
+    "category": "主食类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d050",
+    "name": "照烧鸡腿饭",
+    "category": "主食类",
+    "description": "",
+    "recommend": true
+  },
+  {
+    "id": "d051",
+    "name": "黑椒牛肉意面",
+    "category": "主食类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d052",
+    "name": "北非蛋",
+    "category": "主食类",
+    "description": "",
+    "recommend": false
+  },
+  {
+    "id": "d053",
+    "name": "银耳莲子汤",
+    "category": "汤类",
+    "description": "",
+    "recommend": true
+  },
+  {
+    "id": "d054",
+    "name": "萝卜排骨汤",
+    "category": "汤类",
+    "description": "",
+    "recommend": true
+  }
 ];
-const DEFAULT_ORDERS =, total: 28, note: '少放辣', status: '待处理' }
-];
 
-// ==========================================
-// 3. 异步云端数据库访问层 (Data Access Layer)
-// ==========================================
-const db = {
-    async getDishes() {
-        try {
-            const { data, error } = await supabaseClient.from(TABLES.DISHES).select('*');
-            if (error) throw error;
-            return data && data.length > 0? data : DEFAULT_DISHES;
-        } catch (err) {
-            console.warn("Supabase 菜品表访问失败，已降级使用本地默认数据：", err);
-            return DEFAULT_DISHES;
-        }
-    },
-    async saveDish(dish) {
-        try {
-            const { error } = await supabaseClient.from(TABLES.DISHES).upsert([dish]);
-            if(error) throw error;
-        } catch (err) {
-            console.error("保存菜品失败:", err);
-            alert("保存至云端失败，请检查数据库配置！\n" + err.message);
-        }
-    },
-    async deleteDish(id) {
-        try {
-            const { error } = await supabaseClient.from(TABLES.DISHES).delete().eq('id', id);
-            if(error) throw error;
-        } catch (err) {
-            console.error("删除菜品失败:", err);
-        }
-    },
-    async getCategories() {
-        try {
-            const { data, error } = await supabaseClient.from(TABLES.CATEGORIES).select('*');
-            if (error) throw error;
-            // 兼容可能存在的不同列名结构 (name, category_name 等)
-            if (data && data.length > 0) {
-                return data.map(c => c.name |
-
-| c.category_name |
-| Object.values(c));
-            }
-            return DEFAULT_CATEGORIES;
-        } catch (err) {
-            console.warn("Supabase 分类表访问失败，已降级使用本地默认数据：", err);
-            return DEFAULT_CATEGORIES;
-        }
-    },
-    async addCategory(name) {
-        try {
-            const { error } = await supabaseClient.from(TABLES.CATEGORIES).insert([{ name }]);
-            if(error) throw error;
-        } catch (err) { console.error("新增分类失败:", err); alert("新增云端分类失败！"); }
-    },
-    async deleteCategory(name) {
-        try {
-            const { error } = await supabaseClient.from(TABLES.CATEGORIES).delete().eq('name', name);
-            if(error) throw error;
-        } catch (err) { console.error("删除分类失败:", err); }
-    },
-    async getOrders() {
-        try {
-            const { data, error } = await supabaseClient.from(TABLES.ORDERS).select('*').order('id', { ascending: false });
-            if (error) throw error;
-            if (data && data.length > 0) {
-                // 安全解析 JSON 格式的 items 字符串
-                return data.map(o => ({
-                   ...o,
-                    items: typeof o.items === 'string'? JSON.parse(o.items) : o.items
-                }));
-            }
-            return DEFAULT_ORDERS;
-        } catch (err) {
-            console.warn("Supabase 订单表访问失败，已降级使用本地默认数据：", err);
-            return DEFAULT_ORDERS;
-        }
-    },
-    async addOrder(order) {
-        try {
-            // 将 items 数组转为字符串，确保可以存入普通 Text 类型的 SQL 字段
-            const payload = {...order, items: JSON.stringify(order.items) };
-            const { error } = await supabaseClient.from(TABLES.ORDERS).insert([payload]);
-            if(error) throw error;
-        } catch (err) {
-            console.error("提交订单失败:", err);
-            alert("云端提交失败，但不用担心，厨师可能已经听见你喊了！");
-        }
-    },
-    async updateOrderStatus(id, status) {
-        try {
-            const { error } = await supabaseClient.from(TABLES.ORDERS).update({ status }).eq('id', id);
-            if(error) throw error;
-        } catch (err) { console.error("更新订单状态失败:", err); }
-    },
-    async deleteOrder(id) {
-        try {
-            const { error } = await supabaseClient.from(TABLES.ORDERS).delete().eq('id', id);
-            if(error) throw error;
-        } catch (err) { console.error("删除订单失败:", err); }
-    }
+const S = {
+  categories:[], dishes:[], orders:[],
+  currentCat:"全部", modalDish:null, modalQty:1,
+  cart:[], sb:null, ready:false, isAdmin:false
 };
 
-// ==========================================
-// 4. 全局状态缓存与本地购物车聚合
-// ==========================================
-let currentCategory = '全部';
-let currentDishInModal = null;
-let currentQtyInModal = 1;
+function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({
+  '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+})[m]);}
 
-// 内存中缓存的云端数据，避免弹窗时二次请求
-let memoryDishes =; 
-let memoryCategories =;
-
-const cart = {
-    items:,
-    load() { 
-        this.items = JSON.parse(localStorage.getItem('fm_cart_cloud')) ||; 
-        this.updateBadge(); 
-    },
-    save() { 
-        localStorage.setItem('fm_cart_cloud', JSON.stringify(this.items)); 
-        this.updateBadge(); 
-    },
-    updateBadge() {
-        const badge = document.getElementById('cart-badge');
-        const fab = document.getElementById('cart-fab');
-        const totalQty = this.items.reduce((sum, item) => sum + item.qty, 0);
-        badge.innerText = totalQty;
-        // 控制悬浮购物车的显示逻辑
-        if(totalQty > 0 && location.hash!== '#cart' &&!location.hash.startsWith('#admin')) {
-            fab.classList.remove('hidden');
-        } else {
-            fab.classList.add('hidden');
-        }
-    },
-    addToCartFromModal() {
-        const exists = this.items.find(i => i.id === currentDishInModal.id);
-        if (exists) exists.qty += currentQtyInModal;
-        else this.items.push({...currentDishInModal, qty: currentQtyInModal });
-        this.save();
-        ui.closeModal();
-        alert('已加入购物车！');
-    },
-    updateQty(id, delta) {
-        const item = this.items.find(i => i.id === id);
-        if(!item) return;
-        item.qty += delta;
-        if (item.qty <= 0) this.items = this.items.filter(i => i.id!== id);
-        this.save();
-        views.renderCart(); 
-    },
-    getTotal() { return this.items.reduce((sum, item) => sum + (item.price * item.qty), 0); },
-    clear() { this.items =; this.save(); }
-};
-
-// ==========================================
-// 5. UI 交互控制器
-// ==========================================
-const ui = {
-    openModal(dishId) {
-        currentDishInModal = memoryDishes.find(d => d.id === dishId);
-        if(!currentDishInModal) return;
-        currentQtyInModal = 1;
-        document.getElementById('modal-img').src = currentDishInModal.img |
-
-| '';
-        document.getElementById('modal-title').innerText = currentDishInModal.name;
-        document.getElementById('modal-desc').innerText = currentDishInModal.desc |
-
-| '暂无描述';
-        document.getElementById('modal-price').innerText = `¥${currentDishInModal.price}`;
-        document.getElementById('modal-qty').innerText = currentQtyInModal;
-        document.getElementById('detail-modal').style.display = 'flex';
-    },
-    closeModal() { document.getElementById('detail-modal').style.display = 'none'; },
-    modalQtyChange(delta) {
-        if (currentQtyInModal + delta > 0) {
-            currentQtyInModal += delta;
-            document.getElementById('modal-qty').innerText = currentQtyInModal;
-        }
-    },
-    filterCategory(cat) {
-        currentCategory = cat;
-        views.renderHome(false); // 避免重新从云端拉取，仅重绘试图
-    }
-};
-
-// ==========================================
-// 6. 异步视图渲染引擎 (Async DOM Manipulation)
-// ==========================================
-const views = {
-    app: document.getElementById('app'),
-    
-    showLoader() {
-        this.app.innerHTML = '<div class="loader-box">⏳ 正在从云端获取数据，请稍候...</div>';
-    },
-
-    async renderHome(fetchData = true) {
-        if(fetchData) {
-            this.showLoader();
-            // 并发请求分类和菜品
-            = await Promise.all();
-        }
-        
-        const filtered = currentCategory === '全部'? memoryDishes : memoryDishes.filter(d => d.category === currentCategory);
-        
-        let html = `
-            <div class="categories-wrapper">
-                <div class="category-btn ${currentCategory === '全部'? 'active' : ''}" onclick="ui.filterCategory('全部')">全部</div>
-                ${memoryCategories.map(c => `<div class="category-btn ${currentCategory === c? 'active' : ''}" onclick="ui.filterCategory('${c}')">${c}</div>`).join('')}
-            </div>
-            <div class="food-grid">
-                ${filtered.map(d => `
-                    <div class="food-card" onclick="ui.openModal('${d.id}')">
-                        ${d.recommend? `<div class="tag-recommend">推荐</div>` : ''}
-                        <img src="${d.img}" class="food-img-placeholder" alt="${d.name}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'100\\' height=\\'100\\'><rect width=\\'100\\' height=\\'100\\' fill=\\'%23eee\\'/><text x=\\'50%\\' y=\\'50%\\' dominant-baseline=\\'middle\\' text-anchor=\\'middle\\' fill=\\'%23999\\'>家庭美味</text></svg>'">
-                        <div class="food-info">
-                            <div class="food-title">${d.name}</div>
-                            <div class="food-desc">${d.desc |
-
-| ''}</div>
-                            <div class="food-price">¥${d.price}</div>
-                        </div>
-                    </div>
-                `).join('')}
-                ${filtered.length === 0? '<p style="text-align:center; color:#999; grid-column: 1/-1;">该分类下暂无菜品</p>' : ''}
-            </div>
-        `;
-        this.app.innerHTML = html;
-        cart.updateBadge(); 
-    },
-
-    renderCart() {
-        cart.updateBadge();
-        if (cart.items.length === 0) {
-            this.app.innerHTML = `<div style="text-align:center; margin-top:50px; color:#999;">
-                <h2>购物车是空的</h2>
-                <button class="btn-primary" style="width:200px; margin: 20px auto;" onclick="router.navigate('#home')">去点菜</button>
-            </div>`;
-            return;
-        }
-
-        let html = `<h2>🛒 我的购物车</h2><div style="margin-top:15px;">`;
-        html += cart.items.map(item => `
-            <div class="cart-item">
-                <img src="${item.img}" class="cart-item-img" onerror="this.style.display='none'">
-                <div class="cart-item-info">
-                    <div class="food-title">${item.name}</div>
-                    <div class="food-price">¥${item.price}</div>
-                </div>
-                <div class="qty-controls">
-                    <button class="qty-btn" onclick="cart.updateQty('${item.id}', -1)">-</button>
-                    <span class="qty-val">${item.qty}</span>
-                    <button class="qty-btn" onclick="cart.updateQty('${item.id}', 1)">+</button>
-                </div>
-            </div>
-        `).join('');
-
-        html += `
-            <div class="cart-total-bar">
-                <span>合计:</span>
-                <span style="color:var(--accent-color);">¥${cart.getTotal()}</span>
-            </div>
-            <div class="admin-card" style="margin-top:20px;">
-                <div class="form-group">
-                    <label>下单人姓名 (必填)</label>
-                    <input type="text" id="order-name" placeholder="例如：爸爸、小明">
-                </div>
-                <div class="form-group">
-                    <label>口味备注 (选填)</label>
-                    <input type="text" id="order-note" placeholder="例如：少放辣、不要香菜">
-                </div>
-            </div>
-            <button class="btn-primary" style="margin-top:20px;" onclick="orderLogic.submit()">提交订单</button>
-            <button class="btn-secondary" style="margin-top:10px;" onclick="router.navigate('#home')">继续点菜</button>
-        </div>`;
-        this.app.innerHTML = html;
-    },
-
-    renderSuccess() {
-        this.app.innerHTML = `
-            <div class="success-wrapper">
-                <svg class="success-svg" viewBox="0 0 100 100">
-                    <circle class="success-circle" cx="50" cy="50" r="40" fill="none" stroke="var(--primary-color)" stroke-width="6" stroke-linecap="round"></circle>
-                    <polyline class="success-check" points="35 50 45 60 65 40" fill="none" stroke="var(--primary-color)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"></polyline>
-                </svg>
-                <h2 style="color: var(--primary-color);">云端下单成功！</h2>
-                <p style="color: var(--text-light); margin-top: 10px;">厨房已收到您的订单，请稍作等待。</p>
-                <button class="btn-primary" style="width:200px; margin: 30px auto;" onclick="router.navigate('#home')">返回首页</button>
-            </div>
-        `;
-        cart.updateBadge();
-    },
-
-    async renderAdminOrders() {
-        this.showLoader();
-        const orders = await db.getOrders();
-        
-        let html = `
-            <div class="admin-nav">
-                <button onclick="router.navigate('#admin-dishes')">菜品管理</button>
-                <button onclick="router.navigate('#admin-categories')">分类管理</button>
-                <button class="active">订单管理</button>
-            </div>
-            <div class="admin-list">
-        `;
-        if(orders.length === 0) html += '<p style="text-align:center; margin-top: 20px;">暂无订单</p>';
-        
-        html += orders.map(o => `
-            <div class="admin-card">
-                <div class="admin-card-header">
-                    <span>${o.time} - <strong>${o.customer}</strong></span>
-                    <span class="order-status ${o.status==='待处理'?'status-pending':o.status==='制作中'?'status-making':'status-completed'}">${o.status}</span>
-                </div>
-                <div style="font-size:14px; color:var(--text-light);">
-                    ${(o.items ||).map(i => `<div>${i.name} x ${i.qty} (¥${i.price*i.qty})</div>`).join('')}
-                    ${o.note? `<div style="margin-top:5px; color:#c0392b;">📝备注: ${o.note}</div>` : ''}
-                    <div style="margin-top:5px; font-weight:bold; color:var(--text-dark);">总计: ¥${o.total}</div>
-                </div>
-                <div class="order-actions">
-                    ${o.status === '待处理'? `<button class="btn-primary btn-small" onclick="orderLogic.changeStatus('${o.id}', '制作中')">开始制作</button>` : ''}
-                    ${o.status === '制作中'? `<button class="btn-primary btn-small" style="background:#4CAF50;" onclick="orderLogic.changeStatus('${o.id}', '已完成')">标记完成</button>` : ''}
-                    <button class="btn-danger btn-small" onclick="orderLogic.deleteOrder('${o.id}')">删除订单</button>
-                </div>
-            </div>
-        `).join('');
-        html += `</div>`;
-        this.app.innerHTML = html;
-        cart.updateBadge();
-    },
-
-    async renderAdminDishes() {
-        this.showLoader();
-        = await Promise.all();
-        
-        let html = `
-            <div class="admin-nav">
-                <button class="active">菜品管理</button>
-                <button onclick="router.navigate('#admin-categories')">分类管理</button>
-                <button onclick="router.navigate('#admin-orders')">订单管理</button>
-            </div>
-            <button class="btn-primary" style="margin-bottom:15px;" onclick="adminLogic.showDishForm()">+ 新增菜品</button>
-            <div class="admin-list" id="admin-dish-list">
-        `;
-        html += memoryDishes.map(d => `
-            <div class="admin-card" style="display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <div style="font-weight:bold;">${d.name} <span style="color:var(--accent-color);">¥${d.price}</span></div>
-                    <div style="font-size:12px; color:var(--text-light);">${d.category} | ${d.recommend?'推荐':'普通'}</div>
-                </div>
-                <div>
-                    <button class="btn-primary btn-small" onclick="adminLogic.editDish('${d.id}')">编辑</button>
-                    <button class="btn-danger btn-small" onclick="adminLogic.deleteDish('${d.id}')">删除</button>
-                </div>
-            </div>
-        `).join('');
-        html += `</div><div id="admin-dish-form" class="hidden admin-card"></div>`;
-        this.app.innerHTML = html;
-        cart.updateBadge();
-    },
-
-    async renderAdminCategories() {
-        this.showLoader();
-        memoryCategories = await db.getCategories();
-        
-        let html = `
-            <div class="admin-nav">
-                <button onclick="router.navigate('#admin-dishes')">菜品管理</button>
-                <button class="active">分类管理</button>
-                <button onclick="router.navigate('#admin-orders')">订单管理</button>
-            </div>
-            <div class="admin-card" style="margin-bottom: 15px;">
-                <div style="display:flex; gap: 10px;">
-                    <input type="text" id="new-cat-name" placeholder="输入新分类名称">
-                    <button class="btn-primary" style="width: auto; margin:0;" onclick="adminCategoryLogic.addCategory()">新增</button>
-                </div>
-            </div>
-            <div class="admin-card">
-        `;
-        html += memoryCategories.map(c => `
-            <div class="category-row">
-                <span>${c}</span>
-                <button class="btn-danger btn-small" onclick="adminCategoryLogic.deleteCategory('${c}')">删除</button>
-            </div>
-        `).join('');
-        html += `</div>`;
-        this.app.innerHTML = html;
-    }
-};
-
-// ==========================================
-// 7. 云端业务逻辑控制器 (Cloud CRUD)
-// ==========================================
-const orderLogic = {
-    async submit() {
-        const name = document.getElementById('order-name').value.trim();
-        const note = document.getElementById('order-note').value.trim();
-        if(!name) return alert('请填写下单人姓名！');
-        
-        const newOrder = {
-            id: 'o' + Date.now(),
-            time: new Date().toLocaleString(),
-            customer: name,
-            items: cart.items,
-            total: cart.getTotal(),
-            note: note,
-            status: '待处理'
-        };
-        
-        document.querySelector('.btn-primary').innerText = "正在提交...";
-        await db.addOrder(newOrder);
-        cart.clear();
-        router.navigate('#success');
-    },
-    async changeStatus(id, newStatus) {
-        await db.updateOrderStatus(id, newStatus);
-        views.renderAdminOrders();
-    },
-    async deleteOrder(id) {
-        if(confirm('确定从云端彻底删除此订单吗？')) {
-            await db.deleteOrder(id);
-            views.renderAdminOrders();
-        }
-    }
-};
-
-const adminLogic = {
-    showDishForm(id = null) {
-        document.getElementById('admin-dish-list').classList.add('hidden');
-        const formDiv = document.getElementById('admin-dish-form');
-        formDiv.classList.remove('hidden');
-        
-        let dish = { name:'', price:'', desc:'', category:'', recommend:false, img:'' };
-        if(id) {
-            dish = memoryDishes.find(d => d.id === id) |
-
-| dish;
-        }
-
-        formDiv.innerHTML = `
-            <h3>${id? '编辑' : '新增'}云端菜品</h3>
-            <div class="form-group"><label>菜名</label><input type="text" id="f-name" value="${dish.name}"></div>
-            <div class="form-group"><label>价格 (元)</label><input type="number" id="f-price" value="${dish.price}"></div>
-            <div class="form-group"><label>描述 / 备注</label><input type="text" id="f-desc" value="${dish.desc}"></div>
-            <div class="form-group"><label>图片URL</label><input type="text" id="f-img" value="${dish.img}" placeholder="可留空"></div>
-            <div class="form-group">
-                <label>分类</label>
-                <select id="f-cat">
-                    ${memoryCategories.map(c => `<option value="${c}" ${dish.category===c?'selected':''}>${c}</option>`).join('')}
-                </select>
-            </div>
-            <div class="form-group" style="display:flex; align-items:center; gap:10px;">
-                <input type="checkbox" id="f-rec" style="width:20px; height:20px;" ${dish.recommend?'checked':''}> 
-                <label style="margin:0;">作为推荐菜品展示</label>
-            </div>
-            <button class="btn-primary" onclick="adminLogic.saveDish('${id |
-
-| ''}')" id="save-dish-btn">保存并同步</button>
-            <button class="btn-secondary" style="margin-top:10px;" onclick="views.renderAdminDishes()">取消</button>
-        `;
-    },
-    async saveDish(id) {
-        const name = document.getElementById('f-name').value.trim();
-        const price = parseFloat(document.getElementById('f-price').value);
-        if(!name ||!price) return alert('请填写完整名称和价格');
-
-        const newDish = {
-            id: id |
-
-| 'd' + Date.now(),
-            name: name,
-            price: price,
-            desc: document.getElementById('f-desc').value,
-            img: document.getElementById('f-img').value,
-            category: document.getElementById('f-cat').value,
-            recommend: document.getElementById('f-rec').checked
-        };
-
-        document.getElementById('save-dish-btn').innerText = "保存中...";
-        await db.saveDish(newDish);
-        views.renderAdminDishes();
-    },
-    editDish(id) { this.showDishForm(id); },
-    async deleteDish(id) {
-        if(confirm('确定从云端彻底删除此菜品吗？')) {
-            await db.deleteDish(id);
-            views.renderAdminDishes();
-        }
-    }
-};
-
-const adminCategoryLogic = {
-    async addCategory() {
-        const input = document.getElementById('new-cat-name');
-        const catName = input.value.trim();
-        if(!catName) return alert('分类名称不能为空');
-        
-        await db.addCategory(catName);
-        views.renderAdminCategories();
-    },
-    async deleteCategory(catName) {
-        const isInUse = memoryDishes.some(d => d.category === catName);
-        if(isInUse) {
-            alert('该分类下存在关联的菜品，无法直接删除！请先修改对应菜品的分类。');
-            return;
-        }
-        if(confirm(`确定删除云端分类 "${catName}" 吗？`)) {
-            await db.deleteCategory(catName);
-            views.renderAdminCategories();
-        }
-    }
-};
-
-// ==========================================
-// 8. 轻量级权限校验系统
-// ==========================================
-function verifyAdmin() {
-    // 检查当前浏览器会话中是否已经保存了免密通行证
-    if (sessionStorage.getItem('fm_admin') === 'true') return true;
-    
-    // 如果未保存，则呼出原生的密码弹窗
-    const pwd = prompt('请输入管理员密码进入后台：');
-    if (pwd === ADMIN_PASSWORD) {
-        // 密码正确，写入临时凭证（关闭浏览器失效）
-        sessionStorage.setItem('fm_admin', 'true');
-        return true;
-    } else if (pwd!== null) {
-        alert('密码错误，无权访问后台！');
-    }
-    return false;
+function svgUrl(name){
+  const t=encodeURIComponent((name||'美食').slice(0,4));
+  const s=`<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400"><defs><linearGradient id="g" x1="0" x2="1" y1="0" y2="1"><stop offset="0%" stop-color="#ffb36b"/><stop offset="100%" stop-color="#ff7f50"/></linearGradient></defs><rect width="100%" height="100%" fill="url(#g)"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#fff" font-size="40" font-family="Arial">${t}</text></svg>`;
+  return 'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(s);
 }
 
-// ==========================================
-// 9. 异步 VANILLA JS 哈希路由系统
-// ==========================================
-const router = {
-    navigate(hash) { window.location.hash = hash; },
-    async handleRoute() {
-        const hash = window.location.hash |
-
-| '#home';
-        window.scrollTo(0,0); 
-        
-        // 路由拦截器：保护所有带 #admin 的敏感路由
-        if (hash.startsWith('#admin')) {
-            if (!verifyAdmin()) {
-                // 密码错误或取消，重置回首页
-                window.location.hash = '#home';
-                return;
-            }
-        }
-        
-        switch(hash) {
-            case '#home': await views.renderHome(); break;
-            case '#cart': views.renderCart(); break;
-            case '#success': views.renderSuccess(); break;
-            case '#admin-orders': await views.renderAdminOrders(); break;
-            case '#admin-dishes': await views.renderAdminDishes(); break;
-            case '#admin-categories': await views.renderAdminCategories(); break;
-            default: await views.renderHome();
-        }
+// ── 认证 ──
+const auth = {
+  showPasswordModal(){
+    if(S.isAdmin){router.navigate('#admin-orders');return;}
+    document.getElementById('pw-modal').classList.remove('hidden');
+    document.getElementById('pw-input').value='';
+    document.getElementById('pw-error').innerText='';
+    setTimeout(()=>document.getElementById('pw-input').focus(),100);
+  },
+  check(){
+    if(document.getElementById('pw-input').value===ADMIN_PASSWORD){
+      S.isAdmin=true;
+      document.getElementById('pw-modal').classList.add('hidden');
+      router.navigate('#admin-orders');
+    }else{
+      document.getElementById('pw-error').innerText='密码错误，请重试';
+      document.getElementById('pw-input').value='';
     }
+  },
+  close(){document.getElementById('pw-modal').classList.add('hidden');},
+  logout(){S.isAdmin=false;router.navigate('#home');},
+  require(){if(!S.isAdmin){router.navigate('#home');return false;}return true;}
 };
 
-// ==========================================
-// 10. SYSTEM INITIALIZATION
-// ==========================================
-window.addEventListener('hashchange', router.handleRoute);
-window.addEventListener('DOMContentLoaded', () => {
-    cart.load();       
-    router.handleRoute(); 
-});
+// ── Supabase ──
+async function fetchCats(){const{data,error}=await S.sb.from('categories').select('*').order('id');if(error)throw error;S.categories=(data||[]).map(r=>r.name);}
+async function fetchDishes(){const{data,error}=await S.sb.from('dishes').select('*').order('id');if(error)throw error;S.dishes=data||[];}
+async function fetchOrders(){const{data,error}=await S.sb.from('orders').select('*').order('created_at',{ascending:false});if(error)throw error;S.orders=data||[];}
+async function seed(){
+  const{count:cc}=await S.sb.from('categories').select('*',{count:'exact',head:true});
+  const{count:dc}=await S.sb.from('dishes').select('*',{count:'exact',head:true});
+  if(!cc){const{error}=await S.sb.from('categories').insert(DEFAULT_CATEGORIES.map(n=>{return{name:n}}));if(error)throw error;}
+  if(!dc){const{error}=await S.sb.from('dishes').insert(DEFAULT_DISHES);if(error)throw error;}
+}
+
+// ── UI ──
+const ui = {
+  openModal(id){
+    S.modalDish=S.dishes.find(d=>d.id===id)||null;
+    if(!S.modalDish)return;
+    S.modalQty=1;
+    document.getElementById('modal-img').src=S.modalDish.img||svgUrl(S.modalDish.name);
+    document.getElementById('modal-title').innerText=S.modalDish.name;
+    document.getElementById('modal-desc').innerText=S.modalDish.description||'';
+    document.getElementById('modal-qty').innerText=1;
+    document.getElementById('detail-modal').style.display='flex';
+  },
+  closeModal(){document.getElementById('detail-modal').style.display='none';},
+  overlayClose(e){if(e.target.id==='detail-modal')this.closeModal();},
+  qtyChange(d){if(S.modalQty+d>0){S.modalQty+=d;document.getElementById('modal-qty').innerText=S.modalQty;}},
+  filterCat(c){S.currentCat=c;views.home();}
+};
+
+// ── 购物车 ──
+const cart = {
+  badge(){
+    const total=S.cart.reduce((s,i)=>s+i.qty,0);
+    document.getElementById('cart-badge').innerText=total;
+    const fab=document.getElementById('cart-fab');
+    if(total>0&&!location.hash.startsWith('#admin')&&location.hash!=='#cart')fab.classList.remove('hidden');
+    else fab.classList.add('hidden');
+  },
+  addFromModal(){
+    if(!S.modalDish)return;
+    const ex=S.cart.find(i=>i.id===S.modalDish.id);
+    if(ex)ex.qty+=S.modalQty;else S.cart.push({...S.modalDish,qty:S.modalQty});
+    this.badge();ui.closeModal();alert('已加入购物车 ✅');
+  },
+  updateQty(id,d){
+    const item=S.cart.find(i=>i.id===id);
+    if(!item)return;item.qty+=d;
+    if(item.qty<=0)S.cart=S.cart.filter(i=>i.id!==id);
+    this.badge();views.cart();
+  },
+  clear(){S.cart=[];this.badge();}
+};
+
+// ── 视图 ──
+const app = document.getElementById('app');
+const views = {
+  loading(t='正在加载...'){app.innerHTML=`<div class="loading-box">${esc(t)}</div>`;},
+  home(){
+    const filtered=S.currentCat==='全部'?S.dishes:S.dishes.filter(d=>d.category===S.currentCat);
+    app.innerHTML=`
+      <div class="top-note">今天想吃什么？点击菜品加入购物车，然后提交订单 🍽️</div>
+      <div class="categories-wrapper">
+        <div class="category-btn ${S.currentCat==='全部'?'active':''}" onclick="ui.filterCat('全部')">全部</div>
+        ${S.categories.map(c=>`<div class="category-btn ${S.currentCat===c?'active':''}" onclick="ui.filterCat('${esc(c)}')">${esc(c)}</div>`).join('')}
+      </div>
+      <div class="food-grid">
+        ${filtered.map(d=>`
+          <div class="food-card" onclick="ui.openModal('${d.id}')">
+            ${d.recommend?'<div class="tag-recommend">推荐</div>':''}
+            <img src="${d.img||svgUrl(d.name)}" class="food-img" alt="${esc(d.name)}">
+            <div class="food-info">
+              <div class="food-title">${esc(d.name)}</div>
+              <div class="food-desc">${esc(d.description||'家庭美味')}</div>
+              <div class="food-price">可点菜</div>
+            </div>
+          </div>`).join('')}
+        ${filtered.length===0?'<p style="grid-column:1/-1;text-align:center;color:#999;">该分类暂无菜品</p>':''}
+      </div>`;
+    cart.badge();
+  },
+  cart(){
+    cart.badge();
+    if(!S.cart.length){
+      app.innerHTML=`<div style="text-align:center;margin-top:50px;color:#999;"><h2>购物车是空的</h2><button class="btn-primary" style="width:200px;margin:20px auto;" onclick="router.navigate('#home')">去点菜</button></div>`;
+      return;
+    }
+    app.innerHTML=`
+      <h2>🛒 我的购物车</h2>
+      <div style="margin-top:15px;">
+        ${S.cart.map(item=>`
+          <div class="cart-item">
+            <img src="${item.img||svgUrl(item.name)}" class="cart-item-img" alt="${esc(item.name)}">
+            <div class="cart-item-info"><div class="food-title">${esc(item.name)}</div><div style="font-size:12px;color:var(--text-light);">${esc(item.category)}</div></div>
+            <div class="qty-controls">
+              <button class="qty-btn" onclick="cart.updateQty('${item.id}',-1)">-</button>
+              <span class="qty-val">${item.qty}</span>
+              <button class="qty-btn" onclick="cart.updateQty('${item.id}',1)">+</button>
+            </div>
+          </div>`).join('')}
+        <div class="cart-total-bar"><span>已选</span><span style="color:var(--accent-color);">共 ${S.cart.reduce((s,i)=>s+i.qty,0)} 份</span></div>
+        <div class="admin-card" style="margin-top:20px;">
+          <div class="form-group"><label>下单人姓名（必填）</label><input type="text" id="order-name" placeholder="例如：爸爸、小明"></div>
+          <div class="form-group"><label>口味备注（选填）</label><input type="text" id="order-note" placeholder="例如：少放辣、不要香菜"></div>
+        </div>
+        <button class="btn-primary" style="margin-top:20px;" onclick="order.submit()">提交订单</button>
+        <button class="btn-secondary" style="margin-top:10px;" onclick="router.navigate('#home')">继续点菜</button>
+      </div>`;
+  },
+  success(){
+    app.innerHTML=`<div class="success-wrapper">
+      <svg class="success-svg" viewBox="0 0 100 100">
+        <circle class="success-circle" cx="50" cy="50" r="40" fill="none" stroke="var(--primary-color)" stroke-width="6" stroke-linecap="round"></circle>
+        <polyline class="success-check" points="35 50 45 60 65 40" fill="none" stroke="var(--primary-color)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"></polyline>
+      </svg>
+      <h2 style="color:var(--primary-color);">下单成功！</h2>
+      <p style="color:var(--text-light);margin-top:10px;">订单已提交，等待大厨安排 👨‍🍳</p>
+      <button class="btn-primary" style="width:200px;margin:30px auto;" onclick="router.navigate('#home')">返回首页</button>
+    </div>`;
+    cart.badge();
+  },
+  adminOrders(){
+    if(!auth.require())return;
+    app.innerHTML=`
+      <div class="admin-nav">
+        <button onclick="router.navigate('#admin-dishes')">菜品管理</button>
+        <button onclick="router.navigate('#admin-categories')">分类管理</button>
+        <button class="active">订单管理</button>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:15px;flex-wrap:wrap;">
+        <button class="btn-ghost" onclick="order.refresh()">刷新订单</button>
+        <button class="btn-secondary btn-small" style="margin-top:0;" onclick="auth.logout()">退出管理 🚪</button>
+      </div>
+      <div class="admin-list">
+        ${S.orders.length?S.orders.map(o=>`
+          <div class="admin-card">
+            <div class="admin-card-header">
+              <span>${esc(new Date(o.created_at).toLocaleString())} — <strong>${esc(o.customer)}</strong></span>
+              <span class="order-status ${o.status==='待处理'?'status-pending':o.status==='制作中'?'status-making':'status-completed'}">${esc(o.status)}</span>
+            </div>
+            <div style="font-size:14px;color:var(--text-light);">
+              ${(o.items||[]).map(i=>`<div>${esc(i.name)} x ${i.qty}</div>`).join('')}
+              ${o.note?`<div style="margin-top:5px;color:#c0392b;">📝 备注：${esc(o.note)}</div>`:''}
+              <div style="margin-top:5px;font-weight:bold;color:var(--text-dark);">共 ${(o.items||[]).reduce((s,i)=>s+Number(i.qty||0),0)} 份</div>
+            </div>
+            <div class="order-actions">
+              ${o.status==='待处理'?`<button class="btn-primary btn-small" onclick="order.status('${o.id}','制作中')">开始制作</button>`:''}
+              ${o.status==='制作中'?`<button class="btn-primary btn-small" style="background:#4CAF50;" onclick="order.status('${o.id}','已完成')">标记完成</button>`:''}
+              <button class="btn-danger btn-small" onclick="order.delete('${o.id}')">删除</button>
+            </div>
+          </div>`).join(''):'<p style="text-align:center;color:#999;margin-top:20px;">暂无订单</p>'}
+      </div>`;
+    cart.badge();
+  },
+  adminDishes(){
+    if(!auth.require())return;
+    app.innerHTML=`
+      <div class="admin-nav">
+        <button class="active">菜品管理</button>
+        <button onclick="router.navigate('#admin-categories')">分类管理</button>
+        <button onclick="router.navigate('#admin-orders')">订单管理</button>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:15px;flex-wrap:wrap;">
+        <button class="btn-primary" style="margin:0;" onclick="dish.showForm()">+ 新增菜品</button>
+        <button class="btn-secondary btn-small" style="margin-top:0;" onclick="auth.logout()">退出管理 🚪</button>
+      </div>
+      <div class="admin-list" id="dish-list">
+        ${S.dishes.map(d=>`
+          <div class="admin-card" style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+            <div><div style="font-weight:bold;">${esc(d.name)}</div><div style="font-size:12px;color:var(--text-light);">${esc(d.category)} | ${d.recommend?'推荐':'普通'}</div></div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn-primary btn-small" onclick="dish.showForm('${d.id}')">编辑</button>
+              <button class="btn-danger btn-small" onclick="dish.del('${d.id}')">删除</button>
+            </div>
+          </div>`).join('')}
+      </div>
+      <div id="dish-form" class="hidden admin-card" style="margin-top:15px;"></div>`;
+    cart.badge();
+  },
+  adminCats(){
+    if(!auth.require())return;
+    app.innerHTML=`
+      <div class="admin-nav">
+        <button onclick="router.navigate('#admin-dishes')">菜品管理</button>
+        <button class="active">分类管理</button>
+        <button onclick="router.navigate('#admin-orders')">订单管理</button>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:15px;">
+        <button class="btn-secondary btn-small" style="margin-top:0;" onclick="auth.logout()">退出管理 🚪</button>
+      </div>
+      <div class="admin-card" style="margin-bottom:15px;">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <input type="text" id="new-cat" placeholder="输入新分类名称" style="flex:1;min-width:180px;">
+          <button class="btn-primary" style="width:auto;margin:0;" onclick="cat.add()">新增</button>
+        </div>
+      </div>
+      <div class="admin-card">
+        ${S.categories.map(c=>`
+          <div class="category-row">
+            <span>${esc(c)}</span>
+            <button class="btn-danger btn-small" onclick="cat.del('${esc(c)}')">删除</button>
+          </div>`).join('')}
+      </div>`;
+    cart.badge();
+  }
+};
+
+// ── 订单 ──
+const order = {
+  async submit(){
+    const name=(document.getElementById('order-name')||{}).value?.trim()||'';
+    const note=(document.getElementById('order-note')||{}).value?.trim()||'';
+    if(!name)return alert('请填写下单人姓名！');
+    if(!S.cart.length)return alert('购物车为空');
+    try{
+      const{error}=await S.sb.from('orders').insert({
+        id:'o'+Date.now(),customer:name,note,status:'待处理',
+        items:S.cart.map(i=>{return{id:i.id,name:i.name,qty:i.qty,category:i.category}})
+      });
+      if(error)throw error;
+      cart.clear();await fetchOrders();router.navigate('#success');
+    }catch(e){alert('提交失败：'+(e.message||e));}
+  },
+  async status(id,s){
+    try{const{error}=await S.sb.from('orders').update({status:s}).eq('id',id);if(error)throw error;await fetchOrders();views.adminOrders();}
+    catch(e){alert('更新失败：'+(e.message||e));}
+  },
+  async delete(id){
+    if(!confirm('确定删除此订单？'))return;
+    try{const{error}=await S.sb.from('orders').delete().eq('id',id);if(error)throw error;await fetchOrders();views.adminOrders();}
+    catch(e){alert('删除失败：'+(e.message||e));}
+  },
+  async refresh(){try{await fetchOrders();views.adminOrders();}catch(e){alert('刷新失败：'+(e.message||e));}}
+};
+
+// ── 菜品管理 ──
+const dish = {
+  showForm(id=''){
+    document.getElementById('dish-list')?.classList.add('hidden');
+    const f=document.getElementById('dish-form');
+    f.classList.remove('hidden');
+    let d={name:'',description:'',category:S.categories[0]||'',recommend:false,img:''};
+    if(id)d=S.dishes.find(x=>x.id===id)||d;
+    f.innerHTML=`<h3>${id?'编辑':'新增'}菜品</h3>
+      <div class="form-group"><label>菜名</label><input type="text" id="f-name" value="${esc(d.name)}"></div>
+      <div class="form-group"><label>描述/备注</label><input type="text" id="f-desc" value="${esc(d.description)}"></div>
+      <div class="form-group"><label>图片URL（可留空）</label><input type="text" id="f-img" value="${esc(d.img)}"></div>
+      <div class="form-group"><label>分类</label><select id="f-cat">${S.categories.map(c=>`<option value="${esc(c)}" ${d.category===c?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
+      <div class="form-group" style="display:flex;align-items:center;gap:10px;"><input type="checkbox" id="f-rec" style="width:20px;height:20px;" ${d.recommend?'checked':''}><label style="margin:0;">设为推荐菜品</label></div>
+      <button class="btn-primary" onclick="dish.save('${id}')">保存</button>
+      <button class="btn-secondary" style="margin-top:10px;" onclick="views.adminDishes()">取消</button>`;
+  },
+  async save(id){
+    const name=document.getElementById('f-name').value.trim();
+    if(!name)return alert('请填写菜名');
+    const p={id:id||('d'+Date.now()),name,description:document.getElementById('f-desc').value.trim(),img:document.getElementById('f-img').value.trim(),category:document.getElementById('f-cat').value,recommend:document.getElementById('f-rec').checked};
+    try{
+      const{error}=id?await S.sb.from('dishes').update(p).eq('id',id):await S.sb.from('dishes').insert(p);
+      if(error)throw error;await fetchDishes();views.adminDishes();
+    }catch(e){alert('保存失败：'+(e.message||e));}
+  },
+  async del(id){
+    if(!confirm('确定删除此菜品？'))return;
+    try{const{error}=await S.sb.from('dishes').delete().eq('id',id);if(error)throw error;await fetchDishes();views.adminDishes();}
+    catch(e){alert('删除失败：'+(e.message||e));}
+  }
+};
+
+// ── 分类管理 ──
+const cat = {
+  async add(){
+    const n=(document.getElementById('new-cat')?.value||'').trim();
+    if(!n)return alert('分类名称不能为空');
+    if(S.categories.includes(n))return alert('该分类已存在');
+    try{const{error}=await S.sb.from('categories').insert({name:n});if(error)throw error;await fetchCats();views.adminCats();}
+    catch(e){alert('新增失败：'+(e.message||e));}
+  },
+  async del(name){
+    if(S.dishes.some(d=>d.category===name))return alert('该分类下有菜品，请先修改菜品分类！');
+    if(!confirm(`确定删除分类"${name}"？`))return;
+    try{const{error}=await S.sb.from('categories').delete().eq('name',name);if(error)throw error;await fetchCats();views.adminCats();}
+    catch(e){alert('删除失败：'+(e.message||e));}
+  }
+};
+
+// ── 路由 ──
+const router = {
+  navigate(hash){window.location.hash=hash;},
+  handle(){
+    if(!S.ready)return;
+    window.scrollTo(0,0);
+    switch(window.location.hash||'#home'){
+      case '#home': views.home();break;
+      case '#cart': views.cart();break;
+      case '#success': views.success();break;
+      case '#admin-orders': views.adminOrders();break;
+      case '#admin-dishes': views.adminDishes();break;
+      case '#admin-categories': views.adminCats();break;
+      default: views.home();
+    }
+  }
+};
+
+// ── 初始化 ──
+async function init(){
+  views.loading('正在连接 Supabase...');
+  try{
+    S.sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+    await seed();
+    await fetchCats();
+    await fetchDishes();
+    await fetchOrders();
+    S.ready=true;
+    S.sb.channel('rt-orders').on('postgres_changes',{event:'*',schema:'public',table:'orders'},async()=>{
+      await fetchOrders();
+      if(window.location.hash==='#admin-orders')views.adminOrders();
+    }).subscribe();
+    router.handle();
+  }catch(e){
+    app.innerHTML=`<div style="background:#fff1f1;color:#a94442;border:1px solid #f2caca;padding:20px;border-radius:10px;margin-top:20px;">
+      <b>连接失败</b><br><br>请检查：<br>
+      1. Supabase SQL 是否已在 SQL Editor 执行<br>
+      2. RLS policy 是否已开启<br><br>
+      原始报错：${esc(e.message||String(e))}
+    </div>`;
+  }
+}
+
+window.addEventListener('hashchange',()=>router.handle());
+window.addEventListener('DOMContentLoaded',()=>{cart.badge();init();});
 </script>
 </body>
 </html>
